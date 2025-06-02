@@ -607,11 +607,8 @@ else:
             fig = px.histogram(df, x=x_col, title=chart_type)
             st.plotly_chart(fig, key=f"{prefix}_hist")
 
-    # --- Toggle Functions for Sidebar Sections ---
-
-
     # --- Sidebar UI ---
-    # Set up sidebar with logo, configuration options, sample questions, history, about section, and help links.
+    # Set up sidebar with logo, configuration options, about section, help links, and dropdowns for sample questions and history at the bottom.
     with st.sidebar:
         st.markdown("""
         <style>
@@ -625,11 +622,7 @@ else:
             border: none !important;
             padding: 0.5rem 1rem !important;
         }
-        [data-testid="stSidebar"] [data-testid="stButton"][aria-label="Clear conversation"] > button,
-        [data-testid="stSidebar"] [data-testid="stButton"][aria-label="Sample Questions"] > button,
-        [data-testid="stSidebar"] [data-testid="stButton"][aria-label="History"] > button,
-        [data-testid="stSidebar"] [data-testid="stButton"][aria-label="About"] > button,
-        [data-testid="stSidebar"] [data-testid="stButton"][aria-label="Help & Documentation"] > button {
+        [data-testid="stSidebar"] [data-testid="stButton"][aria-label="Clear conversation"] > button {
             background-color: #28A745 !important;
             color: white !important;
             font-weight: normal !important;
@@ -639,19 +632,33 @@ else:
         """, unsafe_allow_html=True)
         logo_container = st.container()
         button_container = st.container()
-        sample_questions_container = st.container()
-        history_container = st.container()
         about_container = st.container()
         help_container = st.container()
+        sample_questions_container = st.container()
+        history_container = st.container()
         with logo_container:
             logo_url = "https://www.snowflake.com/wp-content/themes/snowflake/assets/img/logo-blue.svg"
             st.image(logo_url, width=250)
         with button_container:
             init_config_options()
+        with about_container:
+            st.markdown("### About")
+            st.write(
+                "This application uses **Snowflake Cortex Analyst** to interpret "
+                "your natural language questions and generate data insights. "
+                "Simply ask a question below to see relevant answers and visualizations."
+            )
+        with help_container:
+            st.markdown("### Help & Documentation")
+            st.write(
+                "- [User Guide](https://docs.snowflake.com/en/guides-overview-ai-features)  \n"
+                "- [Snowflake Cortex Analyst Docs](https://docs.snowflake.com/)  \n"
+                "- [Contact Support](https://www.snowflake.com/en/support/)"
+            )
+        st.markdown("---")
         with sample_questions_container:
-            if st.button("Sample Questions", key="sample_questions_button"):
-                toggle_sample_questions()
-            if st.session_state.show_sample_questions:
+            with st.expander("Sample Questions", expanded=st.session_state.show_sample_questions):
+                st.session_state.show_sample_questions = True
                 sample_questions = [
                     "What is DiLytics Procurement Insight Solution?",
                     "What are the key subject areas covered in the solution?",
@@ -667,9 +674,8 @@ else:
                     if st.button(sample, key=f"sidebar_{sample}"):
                         st.session_state.current_query = sample
         with history_container:
-            if st.button("History", key="history_button"):
-                toggle_history()
-            if st.session_state.show_history:
+            with st.expander("History", expanded=st.session_state.show_history):
+                st.session_state.show_history = True
                 st.markdown("### Recent Questions")
                 user_questions = get_user_questions(limit=10)
                 if not user_questions:
@@ -678,20 +684,6 @@ else:
                     for idx, question in enumerate(user_questions):
                         if st.button(question, key=f"history_{idx}"):
                             st.session_state.current_query = question
-        with about_container:
-            st.markdown("### About")
-            st.write(
-                "This application uses **Snowflake Cortex Analyst** to interpret "
-                "your natural language questions and generate data insights. "
-                "Simply ask a question below to see relevant answers and visualizations."
-            )
-        with help_container:
-            st.markdown("### Help & Documentation")
-            st.write(
-                "- [User Guide](https://docs.snowflake.com/en/guides-overview-ai-features)  \n"
-                "- [Snowflake Cortex Analyst Docs](https://docs.snowflake.com/)  \n"
-                "- [Contact Support](https://www.snowflake.com/en/support/)"
-            )
 
     # --- Main UI and Query Processing ---
     # Set up main interface with fixed header, semantic model display, and chat input.
@@ -883,12 +875,3 @@ else:
                 st.session_state.current_results = assistant_response.get("results")
                 st.session_state.current_sql = assistant_response.get("sql")
                 st.session_state.current_summary = assistant_response.get("summary")
-
-
-    def toggle_sample_questions():
-        st.session_state.show_sample_questions = not st.session_state.show_sample_questions
-        st.session_state.show_history = False
-
-    def toggle_history():
-        st.session_state.show_history = not st.session_state.show_history
-        st.session_state.show_sample_questions = False
