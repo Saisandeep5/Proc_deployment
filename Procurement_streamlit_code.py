@@ -608,13 +608,7 @@ else:
             st.plotly_chart(fig, key=f"{prefix}_hist")
 
     # --- Toggle Functions for Sidebar Sections ---
-    def toggle_sample_questions():
-        st.session_state.show_sample_questions = not st.session_state.show_sample_questions
-        st.session_state.show_history = False
 
-    def toggle_history():
-        st.session_state.show_history = not st.session_state.show_history
-        st.session_state.show_sample_questions = False
 
     # --- Sidebar UI ---
     # Set up sidebar with logo, configuration options, sample questions, history, about section, and help links.
@@ -889,3 +883,12 @@ else:
                 st.session_state.current_results = assistant_response.get("results")
                 st.session_state.current_sql = assistant_response.get("sql")
                 st.session_state.current_summary = assistant_response.get("summary")
+
+
+    def toggle_sample_questions():
+        st.session_state.show_sample_questions = not st.session_state.show_sample_questions
+        st.session_state.show_history = False
+
+    def toggle_history():
+        st.session_state.show_history = not st.session_state.show_history
+        st.session_state.show_sample_questions = False
