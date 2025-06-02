@@ -104,8 +104,8 @@ st.markdown("""
     max-width: 100% !important;
     box-sizing: border-box !important;
 }
-.copy-button, [data-testid="copy-button"], [title="Copy to clipboard"], [data-testid="stTextArea"] {
-    display: none !important;
+# .copy-button, [data-testid="copy-button"], [title="Copy to clipboard"], [data-testid="stTextArea"] {
+#     display: none !important;
 }
 /* Style for the Dilytics logo in the top-right corner */
 .dilytics-logo {
