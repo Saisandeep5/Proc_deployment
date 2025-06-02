@@ -82,6 +82,8 @@ if "clear_conversation" not in st.session_state:
     st.session_state.clear_conversation = False
 if "rerun_trigger" not in st.session_state:
     st.session_state.rerun_trigger = False
+if "query" not in st.session_state:
+    st.session_state.query = None  # Initialize query in session state
 
 # --- CSS Styling ---
 st.markdown("""
@@ -328,7 +330,7 @@ if not st.session_state.authenticated:
                 cur.execute(f"USE DATABASE {DATABASE}")
                 cur.execute(f"USE SCHEMA {SCHEMA}")
                 cur.execute("ALTER SESSION SET TIMEZONE = 'UTC'")
-                cur.execute("ALTER SESSION SET QUOTED_IDENTIFIERS_IGNORE_CASE = TRUE")
+                cur.execute("ALTER SESSION SET QUOTED_IDENTIFIERS_IGNORE_CASE = TRUEmarshal.dump(obj, f, protocol=protocol)
             st.session_state.authenticated = True
             st.success("Authentication successful! Redirecting...")
             st.rerun()
@@ -612,7 +614,7 @@ else:
             border: none !important;
             padding: 0.5rem 1rem !important;
         }
-        [data-testid="stSidebar"] [data-testid="stButton"] > button[kind="secondary"] {
+        [data-testid="stSidebar"] [data-testid="stButton"] > button.ask-button {
             background-color: #f0f0f0 !important;
             color: black !important;
             width: auto !important;
@@ -654,8 +656,8 @@ else:
                 with col1:
                     st.markdown(f"{i}. {sample}")
                 with col2:
-                    if st.button("Ask", key=f"sample_{i}_{sample}", kind="secondary"):
-                        query = sample
+                    if st.button("Ask", key=f"sample_{i}_{sample}"):
+                        st.session_state.query = sample
 
         with about_container:
             st.markdown("### About")
@@ -703,12 +705,17 @@ else:
                     display_chart_tab(message["results"], prefix=f"chart_{hash(message['content'])}", query=message.get("query", ""))
 
     # Handle user query input.
-    query = st.chat_input("Ask your question...")
-    if query and query.lower().startswith("no of"):
-        query = query.replace("no of", "number of", 1)
+    user_input = st.chat_input("Ask your question...")
+    if user_input:
+        st.session_state.query = user_input
+
+    # Use the query from session state
+    query = st.session_state.query
 
     # Process user query based on its type and display results.
     if query:
+        if query.lower().startswith("no of"):
+            query = query.replace("no of", "number of", 1)
         st.session_state.chart_x_axis = None
         st.session_state.chart_y_axis = None
         st.session_state.chart_type = "Bar Chart"
@@ -855,3 +862,6 @@ else:
                 st.session_state.current_results = assistant_response.get("results")
                 st.session_state.current_sql = assistant_response.get("sql")
                 st.session_state.current_summary = assistant_response.get("summary")
+
+        # Reset the query after processing to avoid re-processing on rerun
+        st.session_state.query = None
