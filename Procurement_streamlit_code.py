@@ -182,10 +182,10 @@ def init_service_metadata():
 # --- Initialize Logging Tables ---
 def init_logging_tables():
     try:
-        # Create table for chat logs
+        # Create table for chat logs with IDENTITY for auto-increment
         session.sql("""
             CREATE TABLE IF NOT EXISTS AI.DWH_MART.CHAT_LOGS (
-                LOG_ID AUTOINCREMENT PRIMARY KEY,
+                LOG_ID INTEGER IDENTITY(1,1) PRIMARY KEY,
                 USERNAME VARCHAR,
                 QUESTION VARCHAR,
                 RESPONSE VARCHAR,
@@ -194,10 +194,10 @@ def init_logging_tables():
             )
         """).collect()
         
-        # Create table for feedback
+        # Create table for feedback with IDENTITY for auto-increment
         session.sql("""
             CREATE TABLE IF NOT EXISTS AI.DWH_MART.FEEDBACK_LOGS (
-                FEEDBACK_ID AUTOINCREMENT PRIMARY KEY,
+                FEEDBACK_ID INTEGER IDENTITY(1,1) PRIMARY KEY,
                 USERNAME VARCHAR,
                 QUESTION VARCHAR,
                 RESPONSE VARCHAR,
