@@ -654,18 +654,67 @@ else:
     init_service_metadata()
 
     # Define sample questions for sidebar buttons.
-    st.sidebar.subheader("Sample Questions")
-    sample_questions = [
-        "What is DiLytics Procurement Insight Solution?",
-        "What are the key subject areas covered in the solution?",
-        "Describe the key metrics tracked in the Purchase Requisition reports.",
-        "Show total purchase order value by organization.",
-        "Which supplier has the highest requisition amount?",
-        "How many active purchase orders are there?",
-        "Which supplier has the minimum and maximum PO delivery rate?",
-        "Which buyer has the least and highest PO approval duration?",
-        "What are the top 5 suppliers based on purchase order amount?"
-    ]
+    # st.sidebar.subheader("Sample Questions")
+
+        # Sample questions section
+    if st.button("Sample Questions", key="sample_questions_button"):
+        st.session_state.show_sample_questions = not st.session_state.get("show_sample_questions", False)
+    if st.session_state.get("show_sample_questions", False):
+        sample_questions = [
+            "What is DiLytics Procurement Insight Solution?",
+            "What are the key subject areas covered in the solution?",
+            "Describe the key metrics tracked in the Purchase Requisition reports.",
+            "Show total purchase order value by organization.",
+            "Which supplier has the highest requisition amount?",
+            "How many active purchase orders are there?",
+            "Which supplier has the minimum and maximum PO delivery rate?",
+            "Which buyer has the least and highest PO approval duration?",
+            "What are the top 5 suppliers based on purchase order amount?"
+        ]
+        for sample in sample_questions:
+            if st.button(sample, key=f"sidebar_{sample}"):
+                st.session_state.query = sample
+                st.session_state.show_greeting = False
+
+
+        st.markdown("---")
+
+        # History, About, Help sections
+        if st.button("History", key="history_button"):
+            toggle_history()
+        if st.session_state.show_history:
+            st.markdown("### Recent Questions")
+            user_questions = get_user_questions(limit=10)
+            if not user_questions:
+                st.write("No questions in history yet.")
+            else:
+                for idx, question in enumerate(user_questions):
+                    if st.button(question, key=f"history_{idx}"):
+                        st.session_state.query = question
+                        st.session_state.show_greeting = False
+
+        if st.button("About", key="about_button"):
+            toggle_about()
+        if st.session_state.show_about:
+            st.markdown("### About")
+            st.write(
+                "This application uses **Snowflake Cortex Analyst** to interpret "
+                "your natural language questions and generate data insights. "
+                "Simply ask a question below to see relevant answers and visualizations."
+            )
+
+        if st.button("Help & Documentation", key="help_button"):
+            toggle_help()
+        if st.session_state.show_help:
+            st.markdown("### Help & Documentation")
+            st.write(
+                "- [User Guide](https://docs.snowflake.com/en/guides-overview-ai-features)  \n"
+                "- [Snowflake Cortex Analyst Docs](https://docs.snowflake.com/)  \n"
+                "- [Contact Support](https://www.snowflake.com/en/support/)"
+            )
+
+
+
 
     # Display chat history with results and visualizations.
     for message in st.session_state.chat_history:
