@@ -11,10 +11,9 @@ from snowflake.core import Root
 from typing import Any, Dict, List, Optional, Tuple
 import plotly.express as px
 import time
+from datetime import datetime
 
 # --- Snowflake/Cortex Configuration ---
-# Define constants for Snowflake connection and Cortex API settings.
-# These specify the host, database, schema, API endpoint, and semantic model for procurement data.
 HOST = "HLGSIYM-COB42429.snowflakecomputing.com"
 DATABASE = "AI"
 SCHEMA = "DWH_MART"
@@ -24,7 +23,6 @@ CORTEX_SEARCH_SERVICES = "PROC_SERVICE"
 SEMANTIC_MODEL = '@"AI"."DWH_MART"."PROCUREMENT_SEARCH"/procurement.yaml'
 
 # --- Model Options ---
-# List available Cortex language models for user selection.
 MODELS = [
     "mistral-large",
     "snowflake-arctic",
@@ -33,7 +31,6 @@ MODELS = [
 ]
 
 # --- Streamlit Page Config ---
-# Configure Streamlit app with title, wide layout, and auto sidebar.
 st.set_page_config(
     page_title="Welcome to Cortex AI Assistant",
     layout="wide",
@@ -41,7 +38,6 @@ st.set_page_config(
 )
 
 # --- Session State Initialization ---
-# Initialize session state to manage authentication, connections, chat history, and app settings.
 if "authenticated" not in st.session_state:
     st.session_state.authenticated = False
     st.session_state.username = ""
@@ -87,7 +83,9 @@ if "show_sample_questions" not in st.session_state:
 if "show_history" not in st.session_state:
     st.session_state.show_history = False
 if "selected_task" not in st.session_state:
-    st.session_state.selected_task = None  # To handle task selection without rerun
+    st.session_state.selected_task = None
+if "feedback_submitted" not in st.session_state:
+    st.session_state.feedback_submitted = {}  # Track feedback submissions per message
 
 # --- CSS Styling ---
 st.markdown("""
@@ -169,6 +167,7 @@ def start_new_conversation():
     st.session_state.last_suggestions = []
     st.session_state.clear_conversation = False
     st.session_state.rerun_trigger = True
+    st.session_state.feedback_submitted = {}
 
 # --- Initialize Service Metadata ---
 def init_service_metadata():
@@ -179,6 +178,69 @@ def init_service_metadata():
         st.session_state.service_metadata = [{"name": "PROC_SERVICE", "search_column": svc_search_col}]
     except Exception as e:
         st.error(f"❌ Failed to verify PROC_SERVICE: {str(e)}. Using default configuration.")
+
+# --- Initialize Logging Tables ---
+def init_logging_tables():
+    try:
+        # Create table for chat logs
+        session.sql("""
+            CREATE TABLE IF NOT EXISTS AI.DWH_MART.CHAT_LOGS (
+                LOG_ID AUTOINCREMENT PRIMARY KEY,
+                USERNAME VARCHAR,
+                QUESTION VARCHAR,
+                RESPONSE VARCHAR,
+                TIMESTAMP TIMESTAMP_NTZ,
+                SESSION_ID VARCHAR
+            )
+        """).collect()
+        
+        # Create table for feedback
+        session.sql("""
+            CREATE TABLE IF NOT EXISTS AI.DWH_MART.FEEDBACK_LOGS (
+                FEEDBACK_ID AUTOINCREMENT PRIMARY KEY,
+                USERNAME VARCHAR,
+                QUESTION VARCHAR,
+                RESPONSE VARCHAR,
+                FEEDBACK VARCHAR,
+                TIMESTAMP TIMESTAMP_NTZ,
+                SESSION_ID VARCHAR,
+                LOG_ID INTEGER
+            )
+        """).collect()
+    except Exception as e:
+        st.error(f"❌ Failed to initialize logging tables: {str(e)}")
+
+# --- Log Interaction to Snowflake ---
+def log_interaction(username: str, question: str, response: str, session_id: str):
+    try:
+        timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        session.sql(
+            """
+            INSERT INTO AI.DWH_MART.CHAT_LOGS (USERNAME, QUESTION, RESPONSE, TIMESTAMP, SESSION_ID)
+            VALUES (?, ?, ?, ?, ?)
+            """,
+            (username, question, response, timestamp, session_id)
+        ).collect()
+        # Get the latest log_id for feedback linking
+        log_id = session.sql("SELECT MAX(LOG_ID) AS LAST_ID FROM AI.DWH_MART.CHAT_LOGS").collect()[0]["LAST_ID"]
+        return log_id
+    except Exception as e:
+        st.error(f"❌ Failed to log interaction: {str(e)}")
+        return None
+
+# --- Log Feedback to Snowflake ---
+def log_feedback(username: str, question: str, response: str, feedback: str, session_id: str, log_id: int):
+    try:
+        timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        session.sql(
+            """
+            INSERT INTO AI.DWH_MART.FEEDBACK_LOGS (USERNAME, QUESTION, RESPONSE, FEEDBACK, TIMESTAMP, SESSION_ID, LOG_ID)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+            """,
+            (username, question, response, feedback, timestamp, session_id, log_id)
+        ).collect()
+    except Exception as e:
+        st.error(f"❌ Failed to log feedback: {str(e)}")
 
 # --- Initialize Config Options ---
 def init_config_options():
@@ -342,6 +404,13 @@ else:
     if st.session_state.rerun_trigger:
         st.session_state.rerun_trigger = False
         st.rerun()
+
+    # Initialize logging tables
+    init_logging_tables()
+
+    # Generate a session ID for tracking
+    if "session_id" not in st.session_state:
+        st.session_state.session_id = str(int(time.time()))
 
     # --- Run Snowflake Query ---
     def run_snowflake_query(query):
@@ -674,8 +743,8 @@ else:
     semantic_model_filename = SEMANTIC_MODEL.split("/")[-1]
     init_service_metadata()
 
-    # Display chat history with results and visualizations.
-    for message in st.session_state.chat_history:
+    # Display chat history with results, visualizations, and feedback option.
+    for idx, message in enumerate(st.session_state.chat_history):
         with st.chat_message(message["role"]):
             st.write(message["content"])
             if message["role"] == "assistant" and "results" in message and message["results"] is not None:
@@ -686,6 +755,30 @@ else:
                 if not message["results"].empty and len(message["results"].columns) >= 2:
                     st.write("Visualization:")
                     display_chart_tab(message["results"], prefix=f"chart_{hash(message['content'])}", query=message.get("query", ""))
+            
+            # Add feedback button for assistant messages
+            if message["role"] == "assistant":
+                message_id = f"feedback_{idx}"
+                if message_id not in st.session_state.feedback_submitted:
+                    st.session_state.feedback_submitted[message_id] = False
+                
+                if not st.session_state.feedback_submitted[message_id]:
+                    if st.button("Report Issue with Response", key=f"report_{idx}"):
+                        with st.form(key=f"feedback_form_{idx}"):
+                            feedback = st.text_area("Please describe the issue with this response:", height=100)
+                            submit_button = st.form_submit_button("Submit Feedback")
+                            if submit_button and feedback:
+                                log_feedback(
+                                    username=st.session_state.username,
+                                    question=st.session_state.chat_history[idx-1]["content"],
+                                    response=message["content"],
+                                    feedback=feedback,
+                                    session_id=st.session_state.session_id,
+                                    log_id=message.get("log_id")
+                                )
+                                st.session_state.feedback_submitted[message_id] = True
+                                st.success("Feedback submitted! The admin has been notified.")
+                                st.rerun()
 
     # Handle user query input and selected tasks.
     query = st.chat_input("Ask your question...")
@@ -846,6 +939,15 @@ else:
                     assistant_response["content"] = response_content
                     st.session_state.last_suggestions = suggestions
                     st.session_state.messages.append({"role": "assistant", "content": response_content})
+
+                # Log the interaction
+                log_id = log_interaction(
+                    username=st.session_state.username,
+                    question=original_query,
+                    response=response_content,
+                    session_id=st.session_state.session_id
+                )
+                assistant_response["log_id"] = log_id
 
                 st.session_state.chat_history.append(assistant_response)
                 st.session_state.current_query = None
