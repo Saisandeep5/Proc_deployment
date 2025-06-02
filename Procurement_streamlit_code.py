@@ -115,6 +115,7 @@ st.markdown("""
     z-index: 1000;
     width: 150px;
     height: auto;
+    pointer-events: none !important;
 }
 /* Style for the fixed header container */
 .fixed-header {
