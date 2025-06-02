@@ -214,15 +214,19 @@ def init_logging_tables():
 def log_interaction(username: str, question: str, response: str, session_id: str):
     try:
         timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-        session.sql(
-            """
-            INSERT INTO AI.DWH_MART.CHAT_LOGS (USERNAME, QUESTION, RESPONSE, TIMESTAMP, SESSION_ID)
-            VALUES (?, ?, ?, ?, ?)
-            """,
-            (username, question, response, timestamp, session_id)
-        ).collect()
+        # Create a DataFrame with the log data
+        log_data = pd.DataFrame([{
+            "USERNAME": username,
+            "QUESTION": question,
+            "RESPONSE": response,
+            "TIMESTAMP": timestamp,
+            "SESSION_ID": session_id
+        }])
+        # Use Snowpark to write the DataFrame to the CHAT_LOGS table
+        session.write_pandas(log_data, "CHAT_LOGS", database="AI", schema="DWH_MART", auto_create_table=False)
         # Get the latest log_id for feedback linking
-        log_id = session.sql("SELECT MAX(LOG_ID) AS LAST_ID FROM AI.DWH_MART.CHAT_LOGS").collect()[0]["LAST_ID"]
+        log_id_df = session.sql("SELECT MAX(LOG_ID) AS LAST_ID FROM AI.DWH_MART.CHAT_LOGS").collect()
+        log_id = log_id_df[0]["LAST_ID"] if log_id_df else None
         return log_id
     except Exception as e:
         st.error(f"❌ Failed to log interaction: {str(e)}")
@@ -232,13 +236,18 @@ def log_interaction(username: str, question: str, response: str, session_id: str
 def log_feedback(username: str, question: str, response: str, feedback: str, session_id: str, log_id: int):
     try:
         timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-        session.sql(
-            """
-            INSERT INTO AI.DWH_MART.FEEDBACK_LOGS (USERNAME, QUESTION, RESPONSE, FEEDBACK, TIMESTAMP, SESSION_ID, LOG_ID)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
-            """,
-            (username, question, response, feedback, timestamp, session_id, log_id)
-        ).collect()
+        # Create a DataFrame with the feedback data
+        feedback_data = pd.DataFrame([{
+            "USERNAME": username,
+            "QUESTION": question,
+            "RESPONSE": response,
+            "FEEDBACK": feedback,
+            "TIMESTAMP": timestamp,
+            "SESSION_ID": session_id,
+            "LOG_ID": log_id
+        }])
+        # Use Snowpark to write the DataFrame to the FEEDBACK_LOGS table
+        session.write_pandas(feedback_data, "FEEDBACK_LOGS", database="AI", schema="DWH_MART", auto_create_table=False)
     except Exception as e:
         st.error(f"❌ Failed to log feedback: {str(e)}")
 
