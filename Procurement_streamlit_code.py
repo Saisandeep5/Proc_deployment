@@ -82,8 +82,10 @@ if "clear_conversation" not in st.session_state:
     st.session_state.clear_conversation = False
 if "rerun_trigger" not in st.session_state:
     st.session_state.rerun_trigger = False
-if "query" not in st.session_state:
-    st.session_state.query = None  # Initialize query in session state
+if "show_sample_questions" not in st.session_state:
+    st.session_state.show_sample_questions = False  # Toggle for sample questions visibility
+if "show_history" not in st.session_state:
+    st.session_state.show_history = False  # Toggle for history visibility
 
 # --- CSS Styling ---
 st.markdown("""
@@ -235,6 +237,12 @@ def get_chat_history():
         0, len(st.session_state.chat_history) - st.session_state.num_chat_messages
     )
     return st.session_state.chat_history[start_index : len(st.session_state.chat_history) - 1]
+
+# --- Get User Questions ---
+# Extract the last 'limit' user questions from the chat history in reverse chronological order.
+def get_user_questions(limit=10):
+    user_questions = [msg["content"] for msg in st.session_state.chat_history if msg["role"] == "user"]
+    return user_questions[-limit:][::-1]
 
 # --- Make Chat History Summary ---
 # Summarize chat history and current question into a single query using Cortex.
@@ -390,7 +398,7 @@ else:
     def is_greeting_query(query: str):
         greeting_patterns = [
             r'^\b(hello|hi|hey|greet)\b$',
-            r'^\b(hello|hi|hey|greet)\b\s.*$'
+            r'^\b(hello|hi|hey,greet)\b\s.*$'
         ]
         return any(re.search(pattern, query.lower()) for pattern in greeting_patterns)
 
@@ -599,8 +607,17 @@ else:
             fig = px.histogram(df, x=x_col, title=chart_type)
             st.plotly_chart(fig, key=f"{prefix}_hist")
 
+    # --- Toggle Functions for Sidebar Sections ---
+    def toggle_sample_questions():
+        st.session_state.show_sample_questions = not st.session_state.show_sample_questions
+        st.session_state.show_history = False
+
+    def toggle_history():
+        st.session_state.show_history = not st.session_state.show_history
+        st.session_state.show_sample_questions = False
+
     # --- Sidebar UI ---
-    # Set up sidebar with logo, configuration options, sample questions, and other sections.
+    # Set up sidebar with logo, configuration options, sample questions, history, about section, and help links.
     with st.sidebar:
         st.markdown("""
         <style>
@@ -614,51 +631,59 @@ else:
             border: none !important;
             padding: 0.5rem 1rem !important;
         }
-        [data-testid="stSidebar"] [data-testid="stButton"] > button.ask-button {
-            background-color: #f0f0f0 !important;
-            color: black !important;
-            width: auto !important;
-            border-radius: 5px !important;
-            padding: 0.3rem 0.6rem !important;
-            font-size: 0.9rem !important;
+        [data-testid="stSidebar"] [data-testid="stButton"][aria-label="Clear conversation"] > button,
+        [data-testid="stSidebar"] [data-testid="stButton"][aria-label="Sample Questions"] > button,
+        [data-testid="stSidebar"] [data-testid="stButton"][aria-label="History"] > button,
+        [data-testid="stSidebar"] [data-testid="stButton"][aria-label="About"] > button,
+        [data-testid="stSidebar"] [data-testid="stButton"][aria-label="Help & Documentation"] > button {
+            background-color: #28A745 !important;
+            color: white !important;
+            font-weight: normal !important;
+            border: 1px solid #28A745 !important;
         }
         </style>
         """, unsafe_allow_html=True)
-
         logo_container = st.container()
         button_container = st.container()
         sample_questions_container = st.container()
+        history_container = st.container()
         about_container = st.container()
         help_container = st.container()
-
         with logo_container:
             logo_url = "https://www.snowflake.com/wp-content/themes/snowflake/assets/img/logo-blue.svg"
             st.image(logo_url, width=250)
-
         with button_container:
             init_config_options()
-
         with sample_questions_container:
-            st.subheader("Sample Questions")
-            sample_questions = [
-                "What is DiLytics Procurement Insight Solution?",
-                "What are the key subject areas covered in the solution?",
-                "Describe the key metrics tracked in the Purchase Requisition reports.",
-                "Show total purchase order value by organization.",
-                "Which supplier has the highest requisition amount?",
-                "How many active purchase orders are there?",
-                "Which supplier has the minimum and maximum PO delivery rate?",
-                "Which buyer has the least and highest PO approval duration?",
-                "What are the top 5 suppliers based on purchase order amount?"
-            ]
-            for i, sample in enumerate(sample_questions, 1):
-                col1, col2 = st.columns([0.8, 0.2])
-                with col1:
-                    st.markdown(f"{i}. {sample}")
-                with col2:
-                    if st.button("Ask", key=f"sample_{i}_{sample}"):
-                        st.session_state.query = sample
-
+            if st.button("Sample Questions", key="sample_questions_button"):
+                toggle_sample_questions()
+            if st.session_state.show_sample_questions:
+                sample_questions = [
+                    "What is DiLytics Procurement Insight Solution?",
+                    "What are the key subject areas covered in the solution?",
+                    "Describe the key metrics tracked in the Purchase Requisition reports.",
+                    "Show total purchase order value by organization.",
+                    "Which supplier has the highest requisition amount?",
+                    "How many active purchase orders are there?",
+                    "Which supplier has the minimum and maximum PO delivery rate?",
+                    "Which buyer has the least and highest PO approval duration?",
+                    "What are the top 5 suppliers based on purchase order amount?"
+                ]
+                for sample in sample_questions:
+                    if st.button(sample, key=f"sidebar_{sample}"):
+                        st.session_state.current_query = sample
+        with history_container:
+            if st.button("History", key="history_button"):
+                toggle_history()
+            if st.session_state.show_history:
+                st.markdown("### Recent Questions")
+                user_questions = get_user_questions(limit=10)
+                if not user_questions:
+                    st.write("No questions in history yet.")
+                else:
+                    for idx, question in enumerate(user_questions):
+                        if st.button(question, key=f"history_{idx}"):
+                            st.session_state.current_query = question
         with about_container:
             st.markdown("### About")
             st.write(
@@ -666,7 +691,6 @@ else:
                 "your natural language questions and generate data insights. "
                 "Simply ask a question below to see relevant answers and visualizations."
             )
-
         with help_container:
             st.markdown("### Help & Documentation")
             st.write(
@@ -687,7 +711,6 @@ else:
             """,
             unsafe_allow_html=True
         )
-
     semantic_model_filename = SEMANTIC_MODEL.split("/")[-1]
     init_service_metadata()
 
@@ -704,18 +727,16 @@ else:
                     st.write("Visualization:")
                     display_chart_tab(message["results"], prefix=f"chart_{hash(message['content'])}", query=message.get("query", ""))
 
-    # Handle user query input.
-    user_input = st.chat_input("Ask your question...")
-    if user_input:
-        st.session_state.query = user_input
-
-    # Use the query from session state
-    query = st.session_state.query
+    # Handle user query input and sample question buttons.
+    query = st.chat_input("Ask your question...")
+    if query and query.lower().startswith("no of"):
+        query = query.replace("no of", "number of", 1)
+    if query:
+        st.session_state.current_query = query
 
     # Process user query based on its type and display results.
-    if query:
-        if query.lower().startswith("no of"):
-            query = query.replace("no of", "number of", 1)
+    if st.session_state.current_query:
+        query = st.session_state.current_query
         st.session_state.chart_x_axis = None
         st.session_state.chart_y_axis = None
         st.session_state.chart_type = "Bar Chart"
@@ -752,7 +773,13 @@ else:
                     if greeting not in ["hi", "hello", "hey", "greet"]:
                         greeting = "Hello"
                     response_content = f"{greeting}! I'm here to help with your procurement analytics questions. Here are some questions you can ask me:\n\n"
-                    selected_questions = sample_questions[:5]
+                    selected_questions = [
+                        "What is DiLytics Procurement Insight Solution?",
+                        "What are the key subject areas covered in the solution?",
+                        "Describe the key metrics tracked in the Purchase Requisition reports.",
+                        "Show total purchase order value by organization.",
+                        "Which supplier has the highest requisition amount?"
+                    ]
                     for i, q in enumerate(selected_questions, 1):
                         response_content += f"{i}. {q}\n"
                     response_content += "\nFeel free to ask any of these or come up with your own related to procurement analytics!"
@@ -858,10 +885,7 @@ else:
                     st.session_state.messages.append({"role": "assistant", "content": response_content})
 
                 st.session_state.chat_history.append(assistant_response)
-                st.session_state.current_query = query
+                st.session_state.current_query = None
                 st.session_state.current_results = assistant_response.get("results")
                 st.session_state.current_sql = assistant_response.get("sql")
                 st.session_state.current_summary = assistant_response.get("summary")
-
-        # Reset the query after processing to avoid re-processing on rerun
-        st.session_state.query = None
