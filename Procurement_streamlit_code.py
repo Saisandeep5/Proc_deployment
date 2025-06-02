@@ -598,7 +598,7 @@ else:
             st.plotly_chart(fig, key=f"{prefix}_hist")
 
     # --- Sidebar UI ---
-    # Set up sidebar with logo, configuration options, about section, and help links.
+    # Set up sidebar with logo, configuration options, sample questions, and other sections.
     with st.sidebar:
         st.markdown("""
         <style>
@@ -612,17 +612,51 @@ else:
             border: none !important;
             padding: 0.5rem 1rem !important;
         }
+        [data-testid="stSidebar"] [data-testid="stButton"] > button[kind="secondary"] {
+            background-color: #f0f0f0 !important;
+            color: black !important;
+            width: auto !important;
+            border-radius: 5px !important;
+            padding: 0.3rem 0.6rem !important;
+            font-size: 0.9rem !important;
+        }
         </style>
         """, unsafe_allow_html=True)
+
         logo_container = st.container()
         button_container = st.container()
+        sample_questions_container = st.container()
         about_container = st.container()
         help_container = st.container()
+
         with logo_container:
             logo_url = "https://www.snowflake.com/wp-content/themes/snowflake/assets/img/logo-blue.svg"
             st.image(logo_url, width=250)
+
         with button_container:
             init_config_options()
+
+        with sample_questions_container:
+            st.subheader("Sample Questions")
+            sample_questions = [
+                "What is DiLytics Procurement Insight Solution?",
+                "What are the key subject areas covered in the solution?",
+                "Describe the key metrics tracked in the Purchase Requisition reports.",
+                "Show total purchase order value by organization.",
+                "Which supplier has the highest requisition amount?",
+                "How many active purchase orders are there?",
+                "Which supplier has the minimum and maximum PO delivery rate?",
+                "Which buyer has the least and highest PO approval duration?",
+                "What are the top 5 suppliers based on purchase order amount?"
+            ]
+            for i, sample in enumerate(sample_questions, 1):
+                col1, col2 = st.columns([0.8, 0.2])
+                with col1:
+                    st.markdown(f"{i}. {sample}")
+                with col2:
+                    if st.button("Ask", key=f"sample_{i}_{sample}", kind="secondary"):
+                        query = sample
+
         with about_container:
             st.markdown("### About")
             st.write(
@@ -630,6 +664,7 @@ else:
                 "your natural language questions and generate data insights. "
                 "Simply ask a question below to see relevant answers and visualizations."
             )
+
         with help_container:
             st.markdown("### Help & Documentation")
             st.write(
@@ -650,71 +685,9 @@ else:
             """,
             unsafe_allow_html=True
         )
+
     semantic_model_filename = SEMANTIC_MODEL.split("/")[-1]
     init_service_metadata()
-
-    # Define sample questions for sidebar buttons.
-    # st.sidebar.subheader("Sample Questions")
-
-        # Sample questions section
-    if st.button("Sample Questions", key="sample_questions_button"):
-        st.session_state.show_sample_questions = not st.session_state.get("show_sample_questions", False)
-    if st.session_state.get("show_sample_questions", False):
-        sample_questions = [
-            "What is DiLytics Procurement Insight Solution?",
-            "What are the key subject areas covered in the solution?",
-            "Describe the key metrics tracked in the Purchase Requisition reports.",
-            "Show total purchase order value by organization.",
-            "Which supplier has the highest requisition amount?",
-            "How many active purchase orders are there?",
-            "Which supplier has the minimum and maximum PO delivery rate?",
-            "Which buyer has the least and highest PO approval duration?",
-            "What are the top 5 suppliers based on purchase order amount?"
-        ]
-        for sample in sample_questions:
-            if st.button(sample, key=f"sidebar_{sample}"):
-                st.session_state.query = sample
-                st.session_state.show_greeting = False
-
-
-        st.markdown("---")
-
-        # History, About, Help sections
-        if st.button("History", key="history_button"):
-            toggle_history()
-        if st.session_state.show_history:
-            st.markdown("### Recent Questions")
-            user_questions = get_user_questions(limit=10)
-            if not user_questions:
-                st.write("No questions in history yet.")
-            else:
-                for idx, question in enumerate(user_questions):
-                    if st.button(question, key=f"history_{idx}"):
-                        st.session_state.query = question
-                        st.session_state.show_greeting = False
-
-        if st.button("About", key="about_button"):
-            toggle_about()
-        if st.session_state.show_about:
-            st.markdown("### About")
-            st.write(
-                "This application uses **Snowflake Cortex Analyst** to interpret "
-                "your natural language questions and generate data insights. "
-                "Simply ask a question below to see relevant answers and visualizations."
-            )
-
-        if st.button("Help & Documentation", key="help_button"):
-            toggle_help()
-        if st.session_state.show_help:
-            st.markdown("### Help & Documentation")
-            st.write(
-                "- [User Guide](https://docs.snowflake.com/en/guides-overview-ai-features)  \n"
-                "- [Snowflake Cortex Analyst Docs](https://docs.snowflake.com/)  \n"
-                "- [Contact Support](https://www.snowflake.com/en/support/)"
-            )
-
-
-
 
     # Display chat history with results and visualizations.
     for message in st.session_state.chat_history:
@@ -729,13 +702,10 @@ else:
                     st.write("Visualization:")
                     display_chart_tab(message["results"], prefix=f"chart_{hash(message['content'])}", query=message.get("query", ""))
 
-    # Handle user query input and sample question buttons.
+    # Handle user query input.
     query = st.chat_input("Ask your question...")
     if query and query.lower().startswith("no of"):
         query = query.replace("no of", "number of", 1)
-    for sample in sample_questions:
-        if st.sidebar.button(sample, key=f"sample_{sample}"):
-            query = sample
 
     # Process user query based on its type and display results.
     if query:
