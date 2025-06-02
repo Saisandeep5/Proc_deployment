@@ -330,7 +330,7 @@ if not st.session_state.authenticated:
                 cur.execute(f"USE DATABASE {DATABASE}")
                 cur.execute(f"USE SCHEMA {SCHEMA}")
                 cur.execute("ALTER SESSION SET TIMEZONE = 'UTC'")
-                cur.execute("ALTER SESSION SET QUOTED_IDENTIFIERS_IGNORE_CASE = TRUEmarshal.dump(obj, f, protocol=protocol)
+                cur.execute("ALTER SESSION SET QUOTED_IDENTIFIERS_IGNORE_CASE = TRUE")
             st.session_state.authenticated = True
             st.success("Authentication successful! Redirecting...")
             st.rerun()
