@@ -86,6 +86,8 @@ if "selected_task" not in st.session_state:
     st.session_state.selected_task = None
 if "feedback_submitted" not in st.session_state:
     st.session_state.feedback_submitted = {}  # Track feedback submissions per message
+if "show_logs" not in st.session_state:
+    st.session_state.show_logs = False  # For log viewer toggle
 
 # --- CSS Styling ---
 st.markdown("""
@@ -194,7 +196,7 @@ def init_logging_tables():
             )
         """).collect()
         
-        # Create table for feedback with IDENTITY for auto-increment
+        # Create table for feedback with IDENTITY for auto-increment and a RATING column
         session.sql("""
             CREATE TABLE IF NOT EXISTS AI.DWH_MART.FEEDBACK_LOGS (
                 FEEDBACK_ID INTEGER IDENTITY(1,1) PRIMARY KEY,
@@ -202,6 +204,7 @@ def init_logging_tables():
                 QUESTION VARCHAR,
                 RESPONSE VARCHAR,
                 FEEDBACK VARCHAR,
+                RATING INTEGER,  -- New column for rating (e.g., 1 to 5)
                 TIMESTAMP TIMESTAMP_NTZ,
                 SESSION_ID VARCHAR,
                 LOG_ID INTEGER
@@ -233,15 +236,16 @@ def log_interaction(username: str, question: str, response: str, session_id: str
         return None
 
 # --- Log Feedback to Snowflake ---
-def log_feedback(username: str, question: str, response: str, feedback: str, session_id: str, log_id: int):
+def log_feedback(username: str, question: str, response: str, feedback: str, rating: int, session_id: str, log_id: int):
     try:
         timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-        # Create a DataFrame with the feedback data
+        # Create a DataFrame with the feedback data, including the rating
         feedback_data = pd.DataFrame([{
             "USERNAME": username,
             "QUESTION": question,
             "RESPONSE": response,
             "FEEDBACK": feedback,
+            "RATING": rating,  # Include the rating
             "TIMESTAMP": timestamp,
             "SESSION_ID": session_id,
             "LOG_ID": log_id
@@ -250,6 +254,16 @@ def log_feedback(username: str, question: str, response: str, feedback: str, ses
         session.write_pandas(feedback_data, "FEEDBACK_LOGS", database="AI", schema="DWH_MART", auto_create_table=False)
     except Exception as e:
         st.error(f"❌ Failed to log feedback: {str(e)}")
+
+# --- Fetch Logs for Display ---
+def fetch_logs(table_name: str, limit: int = 100):
+    try:
+        query = f"SELECT * FROM AI.DWH_MART.{table_name} ORDER BY TIMESTAMP DESC LIMIT {limit}"
+        df = session.sql(query).to_pandas()
+        return df
+    except Exception as e:
+        st.error(f"❌ Failed to fetch logs from {table_name}: {str(e)}")
+        return pd.DataFrame()
 
 # --- Initialize Config Options ---
 def init_config_options():
@@ -691,6 +705,7 @@ else:
         help_container = st.container()
         sample_questions_container = st.container()
         history_container = st.container()
+        logs_container = st.container()
         with logo_container:
             logo_url = "https://www.snowflake.com/wp-content/themes/snowflake/assets/img/logo-blue.svg"
             st.image(logo_url, width=250)
@@ -737,6 +752,24 @@ else:
                 else:
                     for idx, question in enumerate(user_questions):
                         st.button(question, key=f"history_{idx}", on_click=set_selected_task, args=(question,))
+        with logs_container:
+            # Only show logs to users with ACCOUNTADMIN role
+            if st.session_state.CONN.get_current_role() == '"ACCOUNTADMIN"':
+                with st.expander("View Logs", expanded=st.session_state.show_logs):
+                    st.session_state.show_logs = True
+                    st.markdown("### Interaction Logs")
+                    chat_logs = fetch_logs("CHAT_LOGS")
+                    if not chat_logs.empty:
+                        st.dataframe(chat_logs)
+                    else:
+                        st.write("No interaction logs available.")
+                    
+                    st.markdown("### Feedback Logs")
+                    feedback_logs = fetch_logs("FEEDBACK_LOGS")
+                    if not feedback_logs.empty:
+                        st.dataframe(feedback_logs)
+                    else:
+                        st.write("No feedback logs available.")
 
     # --- Main UI and Query Processing ---
     with st.container():
@@ -772,21 +805,23 @@ else:
                     st.session_state.feedback_submitted[message_id] = False
                 
                 if not st.session_state.feedback_submitted[message_id]:
-                    if st.button("Report Issue with Response", key=f"report_{idx}"):
+                    if st.button("Provide Feedback on Response", key=f"report_{idx}"):  # Updated button label
                         with st.form(key=f"feedback_form_{idx}"):
-                            feedback = st.text_area("Please describe the issue with this response:", height=100)
+                            feedback = st.text_area("Please provide your feedback on this response:", height=100)
+                            rating = st.selectbox("Rate this response (1-5):", options=[1, 2, 3, 4, 5], index=2)  # Default to 3
                             submit_button = st.form_submit_button("Submit Feedback")
-                            if submit_button and feedback:
+                            if submit_button and (feedback or rating):
                                 log_feedback(
                                     username=st.session_state.username,
                                     question=st.session_state.chat_history[idx-1]["content"],
                                     response=message["content"],
-                                    feedback=feedback,
+                                    feedback=feedback if feedback else "No textual feedback provided.",
+                                    rating=rating,
                                     session_id=st.session_state.session_id,
                                     log_id=message.get("log_id")
                                 )
                                 st.session_state.feedback_submitted[message_id] = True
-                                st.success("Feedback submitted! The admin has been notified.")
+                                st.success("Feedback submitted! Thank you for your input.")
                                 st.rerun()
 
     # Handle user query input and selected tasks.
