@@ -754,7 +754,7 @@ else:
                         st.button(question, key=f"history_{idx}", on_click=set_selected_task, args=(question,))
         with logs_container:
             # Only show logs to users with ACCOUNTADMIN role
-            if st.session_state.CONN.get_current_role() == '"ACCOUNTADMIN"':
+            if st.session_state.snowpark_session.get_current_role() == '"ACCOUNTADMIN"':  # Fixed: Use Snowpark session to get role
                 with st.expander("View Logs", expanded=st.session_state.show_logs):
                     st.session_state.show_logs = True
                     st.markdown("### Interaction Logs")
